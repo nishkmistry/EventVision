@@ -4,7 +4,7 @@ system:
   log_level: "INFO"
 
 video:
-  source: "data/videos/sample_surveillance.mp4"
+  source: 0  # Camera index 0 for real-time live webcam/camera stream, or video file path
   fps: 30
   frame_width: 1280
   frame_height: 720

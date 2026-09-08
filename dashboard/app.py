@@ -28,10 +28,17 @@ def load_config_and_components():
 config, detector, policy_engine, db = load_config_and_components()
 
 st.title("👁️ EventVision: Adaptive Image Processing Pipeline")
-st.caption("Intelligent Event-Driven Architecture with Dynamic Model Selection & AWS Cloud Sync")
+st.caption("Intelligent Real-Time Camera Event Detection & Dynamic Model Selection")
 
 st.sidebar.header("🕹️ Pipeline Controls")
-video_source = st.sidebar.text_input("Video File Path", value=config.get("video", {}).get("source", "data/videos/sample_surveillance.mp4"))
+input_source_raw = st.sidebar.text_input("Camera Index or Video File Path", value=str(config.get("video", {}).get("source", 0)))
+
+# Parse input source: if digits, treat as webcam index 0, 1, etc., else video file path
+if input_source_raw.isdigit():
+    video_source = int(input_source_raw)
+else:
+    video_source = input_source_raw
+
 aws_enabled = st.sidebar.checkbox("Enable AWS S3 Cloud Sync", value=config.get("aws", {}).get("enabled", False))
 
 st.sidebar.divider()
@@ -44,82 +51,90 @@ st.sidebar.progress(ram_usage / 100.0, text=f"RAM Usage: {ram_usage}%")
 col_video, col_events = st.columns([3, 2])
 
 with col_video:
-    st.subheader("📹 Live Surveillance Feed & Processing")
+    st.subheader("📹 Real-Time Camera Feed & Event Capture")
     video_placeholder = st.empty()
     status_placeholder = st.empty()
 
 with col_events:
-    st.subheader("⚡ Event Feed & Priority Metrics")
+    st.subheader("⚡ Live Captured Events & Priority Metrics")
     event_list_placeholder = st.empty()
 
 st.divider()
 st.subheader("📊 System Metrics & History")
-tab1, tab2 = st.tabs(["Event History", "Performance Metrics"])
+tab1, tab2 = st.tabs(["Captured Event History", "Performance Metrics"])
 
-if st.button("▶️ Start Processing Surveillance Feed"):
-    if not os.path.exists(video_source):
-        st.error(f"Video file not found at: {video_source}")
+if st.button("▶️ Start Live Camera Stream"):
+    # Check validity if string path
+    if isinstance(video_source, str) and not os.path.exists(video_source):
+        st.error(f"Video source path not found at: {video_source}")
     else:
         cap = cv2.VideoCapture(video_source)
-        frame_idx = 0
-        events_processed_count = 0
-        start_time = time.time()
+        if not cap.isOpened():
+            st.error(f"Could not open camera/video source: {video_source}")
+        else:
+            frame_idx = 0
+            events_processed_count = 0
+            start_time = time.time()
+            stop_button = st.button("⏹️ Stop Camera Stream")
 
-        while cap.isOpened():
-            ret, frame = cap.read()
-            if not ret:
-                break
+            while cap.isOpened() and not stop_button:
+                ret, frame = cap.read()
+                if not ret:
+                    st.warning("No frame retrieved from camera source.")
+                    break
 
-            frame_idx += 1
-            raw_events = detector.process_frame(frame, frame_id=frame_idx)
+                frame_idx += 1
+                raw_events = detector.process_frame(frame, frame_id=frame_idx)
 
-            display_frame = frame.copy()
-            processed_events = []
+                display_frame = frame.copy()
+                processed_events = []
 
-            for raw_evt in raw_events:
-                evt = policy_engine.process_event_adaptively(raw_evt, frame)
-                db.save_event(evt)
-                processed_events.append(evt)
-                events_processed_count += 1
+                for raw_evt in raw_events:
+                    evt = policy_engine.process_event_adaptively(raw_evt, frame)
+                    db.save_event(evt)
+                    processed_events.append(evt)
+                    events_processed_count += 1
 
-                bbox = evt.bbox
-                if bbox:
-                    color = (0, 0, 255) if evt.priority_score > 0.8 else (0, 255, 255) if evt.priority_score > 0.5 else (0, 255, 0)
-                    cv2.rectangle(display_frame, (bbox[0], bbox[1]), (bbox[2], bbox[3]), color, 2)
-                    label = f"{evt.event_type} | P:{evt.priority_score:.2f} | {evt.processing_level} ({evt.model_used})"
-                    cv2.putText(display_frame, label, (bbox[0], max(25, bbox[1] - 10)),
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
+                    bbox = evt.bbox
+                    if bbox:
+                        color = (0, 0, 255) if evt.priority_score > 0.8 else (0, 255, 255) if evt.priority_score > 0.5 else (0, 255, 0)
+                        cv2.rectangle(display_frame, (bbox[0], bbox[1]), (bbox[2], bbox[3]), color, 2)
+                        label = f"{evt.event_type} | P:{evt.priority_score:.2f} | {evt.processing_level} ({evt.model_used})"
+                        cv2.putText(display_frame, label, (bbox[0], max(25, bbox[1] - 10)),
+                                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
 
-            rgb_frame = cv2.cvtColor(display_frame, cv2.COLOR_BGR2RGB)
-            video_placeholder.image(rgb_frame, channels="RGB", use_container_width=True)
+                rgb_frame = cv2.cvtColor(display_frame, cv2.COLOR_BGR2RGB)
+                video_placeholder.image(rgb_frame, channels="RGB", use_container_width=True)
 
-            fps = frame_idx / (time.time() - start_time)
-            status_placeholder.info(f"Frame: {frame_idx} | FPS: {fps:.1f} | Total Events: {events_processed_count}")
+                fps = frame_idx / (time.time() - start_time)
+                status_placeholder.info(f"Frame: {frame_idx} | FPS: {fps:.1f} | Captured Events: {events_processed_count}")
 
-            if processed_events:
-                latest_evt = processed_events[-1]
-                event_list_placeholder.markdown(f"""
-                **Latest Event Captured:**
-                - **Type:** `{latest_evt.event_type}`
-                - **Priority Score:** `{latest_evt.priority_score:.4f}`
-                - **Processing Level:** `{latest_evt.processing_level}`
-                - **Model Selected:** `{latest_evt.model_used}`
-                - **Latency:** `{latest_evt.latency_ms:.1f} ms`
-                - **Cloud Synced:** `{latest_evt.cloud_synced}`
-                """)
+                if processed_events:
+                    latest_evt = processed_events[-1]
+                    event_list_placeholder.markdown(f"""
+                    **Latest Captured Event Image:**
+                    - **Type:** `{latest_evt.event_type}`
+                    - **Priority Score:** `{latest_evt.priority_score:.4f}`
+                    - **Processing Level:** `{latest_evt.processing_level}`
+                    - **Model Selected:** `{latest_evt.model_used}`
+                    - **Snapshot File:** `{latest_evt.image_snapshot_path}`
+                    - **Cloud Synced:** `{latest_evt.cloud_synced}`
+                    """)
+                    if latest_evt.image_snapshot_path and os.path.exists(latest_evt.image_snapshot_path):
+                        st.image(latest_evt.image_snapshot_path, caption="Captured Event Snapshot")
 
-            time.sleep(0.01)
+                time.sleep(0.01)
 
-        cap.release()
-        st.success("Surveillance stream finished processing.")
+            cap.release()
+            st.success("Camera stream stopped.")
 
 with tab1:
     events_data = db.get_events(limit=50)
     if events_data:
         df_events = pd.DataFrame(events_data)
-        st.dataframe(df_events[["timestamp", "event_type", "priority_score", "processing_level", "model_used", "latency_ms", "cloud_synced"]], use_container_width=True)
+        st.dataframe(df_events[["timestamp", "event_type", "priority_score", "processing_level", "model_used", "image_snapshot_path", "cloud_synced"]], use_container_width=True)
     else:
-        st.info("No events saved in database yet.")
+        st.info("No events captured yet.")
 
 with tab2:
     metrics_data = db.get_latest_metrics(limit=50)
