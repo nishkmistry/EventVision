@@ -1,0 +1,43 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'AWS CloudFormation Template for EventVision Infrastructure'
+
+Parameters:
+  EnvironmentName:
+    Type: String
+    Default: 'production'
+
+Resources:
+  EventVisionSnapshotBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'eventvision-snapshots-${AWS::AccountId}-${AWS::Region}'
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  EventVisionEventsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: 'EventVisionEvents'
+      AttributeDefinitions:
+        - AttributeName: 'event_id'
+          AttributeType: 'S'
+      KeySchema:
+        - AttributeName: 'event_id'
+          KeyType: 'HASH'
+      BillingMode: PAY_PER_REQUEST
+
+  EventVisionQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: 'eventvision-event-queue'
+
+Outputs:
+  S3BucketName:
+    Value: !Ref EventVisionSnapshotBucket
+  DynamoDBTableName:
+    Value: !Ref EventVisionEventsTable
+  SQSQueueUrl:
+    Value: !Ref EventVisionQueue

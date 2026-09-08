@@ -1,0 +1,53 @@
+system:
+  name: "EventVision"
+  version: "1.0.0"
+  log_level: "INFO"
+
+video:
+  source: "data/videos/sample_surveillance.mp4"
+  fps: 30
+  frame_width: 1280
+  frame_height: 720
+
+restricted_zones:
+  - name: "Restricted_Zone_A"
+    polygon: [[400, 200], [880, 200], [880, 600], [400, 600]]
+    importance: 1.0
+
+detection:
+  motion_threshold: 25
+  min_contour_area: 500
+  yolo_model_default: "yolov8n.pt"
+
+priority:
+  weights:
+    confidence: 0.25
+    severity: 0.25
+    zone: 0.30
+    urgency: 0.20
+  thresholds:
+    skip: 0.20
+    light: 0.50
+    standard: 0.80
+    high_accuracy: 1.00
+
+models:
+  lightweight:
+    name: "yolov8n.pt"
+    imgsz: 320
+  standard:
+    name: "yolov8s.pt"
+    imgsz: 640
+  high_accuracy:
+    name: "yolov8m.pt"
+    imgsz: 640
+
+aws:
+  enabled: false
+  region: "us-east-1"
+  s3_bucket: "eventvision-snapshots-bucket"
+  sqs_queue_url: ""
+  dynamodb_table: "EventVisionEvents"
+
+database:
+  db_path: "eventvision.db"
