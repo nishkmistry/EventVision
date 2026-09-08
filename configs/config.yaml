@@ -4,10 +4,11 @@ system:
   log_level: "INFO"
 
 video:
-  source: 0  # Camera index 0 for real-time live webcam/camera stream, or video file path
+  source: 0
   fps: 30
   frame_width: 1280
   frame_height: 720
+  process_every_n_frames: 3  # Frame sampling step to eliminate video lag
 
 restricted_zones:
   - name: "Restricted_Zone_A"
@@ -30,6 +31,7 @@ priority:
     light: 0.50
     standard: 0.80
     high_accuracy: 1.00
+  snapshot_priority_threshold: 0.50  # Capture image snapshot only for significant activity
 
 models:
   lightweight:

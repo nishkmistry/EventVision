@@ -37,9 +37,28 @@ class EventClassifier:
         "CRITICAL_ANOMALY": 1.0
     }
 
+    # Contextual semantic relevance multiplier table
+    SEMANTIC_WEIGHT_MAP = {
+        "RESTRICTED_ZONE_INTRUSION": 1.00,
+        "CRITICAL_ANOMALY": 0.95,
+        "PERSON_DETECTED": 0.85,
+        "VEHICLE_DETECTED": 0.75,
+        "ANOMALY": 0.60,
+        "MOTION": 0.30
+    }
+
     def __init__(self, restricted_zones: Optional[List[Dict[str, Any]]] = None, priority_engine: Optional[PriorityEngine] = None):
         self.restricted_zones = restricted_zones or []
         self.priority_engine = priority_engine or PriorityEngine()
+
+    def calculate_semantic_score(self, event_type: str, confidence: float, zone_importance: float) -> float:
+        """
+        Calculate semantic score reflecting high-level contextual importance.
+        """
+        base_semantic = self.SEMANTIC_WEIGHT_MAP.get(event_type, 0.50)
+        # Factor in zone importance and detection confidence
+        semantic_score = base_semantic * 0.6 + zone_importance * 0.2 + confidence * 0.2
+        return round(float(np.clip(semantic_score, 0.0, 1.0)), 4)
 
     def classify_detections(self, detections: List[Dict[str, Any]], has_motion: bool, motion_ratio: float) -> List[Dict[str, Any]]:
         classified_events = []
@@ -52,6 +71,7 @@ class EventClassifier:
             zone_importance = 0.1
             urgency = 0.2
             priority = self.priority_engine.calculate_priority(confidence, severity, zone_importance, urgency)
+            semantic = self.calculate_semantic_score(event_type, confidence, zone_importance)
 
             classified_events.append({
                 "event_type": event_type,
@@ -61,6 +81,7 @@ class EventClassifier:
                 "zone_importance": zone_importance,
                 "urgency": urgency,
                 "priority_score": priority,
+                "semantic_score": semantic,
                 "bbox": None
             })
             return classified_events
@@ -109,6 +130,7 @@ class EventClassifier:
                 urgency = 0.3
 
             priority = self.priority_engine.calculate_priority(conf, severity, zone_importance, urgency)
+            semantic = self.calculate_semantic_score(event_type, conf, zone_importance)
 
             classified_events.append({
                 "event_type": event_type,
@@ -118,6 +140,7 @@ class EventClassifier:
                 "zone_importance": zone_importance,
                 "urgency": urgency,
                 "priority_score": priority,
+                "semantic_score": semantic,
                 "bbox": bbox
             })
 

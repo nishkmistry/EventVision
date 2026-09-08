@@ -4,14 +4,6 @@ import pandas as pd
 import yaml
 import time
 import os
-
-import sys
-from pathlib import Path
-
-# Add the project root (F:\EventVision) to Python path
-sys.path.append(str(Path(__file__).resolve().parent.parent))
-
-
 import psutil
 
 from detection.event_detector import EventDetector
@@ -36,21 +28,24 @@ def load_config_and_components():
 config, detector, policy_engine, db = load_config_and_components()
 
 st.title("👁️ EventVision: Adaptive Image Processing Pipeline")
-st.caption("Intelligent Real-Time Camera Event Detection & Dynamic Model Selection")
+st.caption("Intelligent Real-Time Event Detection, Dynamic Model Selection & Semantic Context Engine")
 
 st.sidebar.header("🕹️ Pipeline Controls")
 input_source_raw = st.sidebar.text_input("Camera Index or Video File Path", value=str(config.get("video", {}).get("source", 0)))
 
-# Parse input source: if digits, treat as webcam index 0, 1, etc., else video file path
 if input_source_raw.isdigit():
     video_source = int(input_source_raw)
 else:
     video_source = input_source_raw
 
+frame_step = st.sidebar.slider("Frame Processing Sampling Step (higher = smoother / no lag)", min_value=1, max_value=10, value=config.get("video", {}).get("process_every_n_frames", 3))
+snapshot_threshold = st.sidebar.slider("Significant Event Snapshot Priority Threshold", min_value=0.1, max_value=1.0, value=float(config.get("priority", {}).get("snapshot_priority_threshold", 0.50)), step=0.05)
+detector.snapshot_priority_threshold = snapshot_threshold
+
 aws_enabled = st.sidebar.checkbox("Enable AWS S3 Cloud Sync", value=config.get("aws", {}).get("enabled", False))
 
 st.sidebar.divider()
-st.sidebar.subheader("⚙️ System Status")
+st.sidebar.subheader("⚙️ System Metrics")
 cpu_usage = psutil.cpu_percent()
 ram_usage = psutil.virtual_memory().percent
 st.sidebar.progress(cpu_usage / 100.0, text=f"CPU Usage: {cpu_usage}%")
@@ -59,20 +54,19 @@ st.sidebar.progress(ram_usage / 100.0, text=f"RAM Usage: {ram_usage}%")
 col_video, col_events = st.columns([3, 2])
 
 with col_video:
-    st.subheader("📹 Real-Time Camera Feed & Event Capture")
+    st.subheader("📹 Real-Time Stream & Event Overlay")
     video_placeholder = st.empty()
     status_placeholder = st.empty()
 
 with col_events:
-    st.subheader("⚡ Live Captured Events & Priority Metrics")
+    st.subheader("⚡ Significant Activity & Semantic Context")
     event_list_placeholder = st.empty()
 
 st.divider()
-st.subheader("📊 System Metrics & History")
-tab1, tab2 = st.tabs(["Captured Event History", "Performance Metrics"])
+st.subheader("📊 System Metrics & Event Log")
+tab1, tab2 = st.tabs(["Captured Significant Events", "Performance Metrics"])
 
-if st.button("▶️ Start Live Camera Stream"):
-    # Check validity if string path
+if st.button("▶️ Start Live Stream / Camera"):
     if isinstance(video_source, str) and not os.path.exists(video_source):
         st.error(f"Video source path not found at: {video_source}")
     else:
@@ -83,17 +77,20 @@ if st.button("▶️ Start Live Camera Stream"):
             frame_idx = 0
             events_processed_count = 0
             start_time = time.time()
-            stop_button = st.button("⏹️ Stop Camera Stream")
+            stop_button = st.button("⏹️ Stop Stream")
 
             while cap.isOpened() and not stop_button:
                 ret, frame = cap.read()
                 if not ret:
-                    st.warning("No frame retrieved from camera source.")
                     break
 
                 frame_idx += 1
-                raw_events = detector.process_frame(frame, frame_id=frame_idx)
 
+                # Frame sampling step to eliminate video lag
+                if frame_idx % frame_step != 0:
+                    continue
+
+                raw_events = detector.process_frame(frame, frame_id=frame_idx)
                 display_frame = frame.copy()
                 processed_events = []
 
@@ -107,7 +104,7 @@ if st.button("▶️ Start Live Camera Stream"):
                     if bbox:
                         color = (0, 0, 255) if evt.priority_score > 0.8 else (0, 255, 255) if evt.priority_score > 0.5 else (0, 255, 0)
                         cv2.rectangle(display_frame, (bbox[0], bbox[1]), (bbox[2], bbox[3]), color, 2)
-                        label = f"{evt.event_type} | P:{evt.priority_score:.2f} | {evt.processing_level} ({evt.model_used})"
+                        label = f"{evt.event_type} | P:{evt.priority_score:.2f} S:{evt.semantic_score:.2f} | {evt.processing_level}"
                         cv2.putText(display_frame, label, (bbox[0], max(25, bbox[1] - 10)),
                                     cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
 
@@ -115,32 +112,32 @@ if st.button("▶️ Start Live Camera Stream"):
                 video_placeholder.image(rgb_frame, channels="RGB", use_container_width=True)
 
                 fps = frame_idx / (time.time() - start_time)
-                status_placeholder.info(f"Frame: {frame_idx} | FPS: {fps:.1f} | Captured Events: {events_processed_count}")
+                status_placeholder.info(f"Frame: {frame_idx} | FPS: {fps:.1f} | Significant Events: {events_processed_count}")
 
                 if processed_events:
                     latest_evt = processed_events[-1]
                     event_list_placeholder.markdown(f"""
-                    **Latest Captured Event Image:**
-                    - **Type:** `{latest_evt.event_type}`
+                    **Latest Significant Event:**
+                    - **Event Type:** `{latest_evt.event_type}`
                     - **Priority Score:** `{latest_evt.priority_score:.4f}`
-                    - **Processing Level:** `{latest_evt.processing_level}`
-                    - **Model Selected:** `{latest_evt.model_used}`
-                    - **Snapshot File:** `{latest_evt.image_snapshot_path}`
-                    - **Cloud Synced:** `{latest_evt.cloud_synced}`
+                    - **Semantic Score:** `{latest_evt.semantic_score:.4f}`
+                    - **Processing Policy:** `{latest_evt.processing_level}`
+                    - **Model Used:** `{latest_evt.model_used}`
+                    - **Snapshot Image:** `{latest_evt.image_snapshot_path or 'Not Triggered (below threshold)'}`
                     """)
                     if latest_evt.image_snapshot_path and os.path.exists(latest_evt.image_snapshot_path):
-                        st.image(latest_evt.image_snapshot_path, caption="Captured Event Snapshot")
+                        st.image(latest_evt.image_snapshot_path, caption=f"Snapshot: {latest_evt.event_type} (Priority: {latest_evt.priority_score})")
 
-                time.sleep(0.01)
+                time.sleep(0.001)
 
             cap.release()
-            st.success("Camera stream stopped.")
+            st.success("Stream stopped.")
 
 with tab1:
     events_data = db.get_events(limit=50)
     if events_data:
         df_events = pd.DataFrame(events_data)
-        st.dataframe(df_events[["timestamp", "event_type", "priority_score", "processing_level", "model_used", "image_snapshot_path", "cloud_synced"]], use_container_width=True)
+        st.dataframe(df_events[["timestamp", "event_type", "priority_score", "semantic_score", "processing_level", "model_used", "image_snapshot_path", "cloud_synced"]], use_container_width=True)
     else:
         st.info("No events captured yet.")
 
