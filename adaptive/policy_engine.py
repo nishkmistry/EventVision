@@ -43,6 +43,16 @@ class PolicyEngine:
             event.model_used = "Skipped"
             return event
 
+        if policy == "LIGHT":
+            # EventDetector's initial classification pass already ran YOLO
+            # (yolov8n) on this frame to produce the event. LIGHT policy
+            # uses the same lightweight model, so re-running inference here
+            # is pure duplicated cost with no accuracy benefit — reuse the
+            # existing detection instead. STANDARD/HIGH_ACCURACY still get a
+            # genuine second pass with a stronger model below.
+            event.model_used = "yolov8n.pt (reused from detection stage)"
+            return event
+
         adapted_frame, scale = adapt_resolution(frame, event.bbox, policy)
         result = self.model_router.route_and_process(policy, adapted_frame)
         event.model_used = result["model_name"]
