@@ -13,7 +13,8 @@ class Event(BaseModel):
     zone_importance: float = 0.0
     urgency: float = 0.5
     priority_score: float = 0.0
-    semantic_score: float = 0.5  # Contextual semantic relevance score [0.0 to 1.0]
+    semantic_score: float = 0.5
+    capture_reason: str = "Standard Event Activity"  # Detailed explanation of why event was captured
     processing_level: str = "SKIP"
     model_used: str = "None"
     latency_ms: float = 0.0

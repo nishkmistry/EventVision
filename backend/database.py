@@ -26,6 +26,7 @@ class DatabaseManager:
                 urgency REAL,
                 priority_score REAL,
                 semantic_score REAL,
+                capture_reason TEXT,
                 processing_level TEXT,
                 model_used TEXT,
                 latency_ms REAL,
@@ -35,11 +36,13 @@ class DatabaseManager:
                 metadata TEXT
             )
             """)
-            # Check if semantic_score column exists (for schema migrations if table existed)
+            # Migrations check
             cursor.execute("PRAGMA table_info(events)")
             columns = [col[1] for col in cursor.fetchall()]
             if "semantic_score" not in columns:
                 cursor.execute("ALTER TABLE events ADD COLUMN semantic_score REAL DEFAULT 0.5")
+            if "capture_reason" not in columns:
+                cursor.execute("ALTER TABLE events ADD COLUMN capture_reason TEXT DEFAULT ''")
 
             cursor.execute("""
             CREATE TABLE IF NOT EXISTS system_metrics (
@@ -60,9 +63,10 @@ class DatabaseManager:
             cursor.execute("""
             INSERT OR REPLACE INTO events (
                 event_id, timestamp, event_type, confidence, severity, zone,
-                zone_importance, urgency, priority_score, semantic_score, processing_level,
-                model_used, latency_ms, bbox, image_snapshot_path, cloud_synced, metadata
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                zone_importance, urgency, priority_score, semantic_score, capture_reason,
+                processing_level, model_used, latency_ms, bbox, image_snapshot_path,
+                cloud_synced, metadata
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 event.event_id,
                 event.timestamp,
@@ -74,6 +78,7 @@ class DatabaseManager:
                 event.urgency,
                 event.priority_score,
                 event.semantic_score,
+                event.capture_reason,
                 event.processing_level,
                 event.model_used,
                 event.latency_ms,

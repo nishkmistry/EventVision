@@ -29,17 +29,16 @@ class EventClassifier:
     SEVERITY_MAP = {
         "MOTION": 0.2,
         "ANOMALY": 0.4,
-        "DOG": 0.3,
-        "CAT": 0.3,
+        "PERSON_SMILING": 0.85,  # High severity for smiling person event
         "VEHICLE_DETECTED": 0.6,
         "PERSON_DETECTED": 0.7,
         "RESTRICTED_ZONE_INTRUSION": 0.95,
         "CRITICAL_ANOMALY": 1.0
     }
 
-    # Contextual semantic relevance multiplier table
     SEMANTIC_WEIGHT_MAP = {
         "RESTRICTED_ZONE_INTRUSION": 1.00,
+        "PERSON_SMILING": 0.90,
         "CRITICAL_ANOMALY": 0.95,
         "PERSON_DETECTED": 0.85,
         "VEHICLE_DETECTED": 0.75,
@@ -52,11 +51,7 @@ class EventClassifier:
         self.priority_engine = priority_engine or PriorityEngine()
 
     def calculate_semantic_score(self, event_type: str, confidence: float, zone_importance: float) -> float:
-        """
-        Calculate semantic score reflecting high-level contextual importance.
-        """
         base_semantic = self.SEMANTIC_WEIGHT_MAP.get(event_type, 0.50)
-        # Factor in zone importance and detection confidence
         semantic_score = base_semantic * 0.6 + zone_importance * 0.2 + confidence * 0.2
         return round(float(np.clip(semantic_score, 0.0, 1.0)), 4)
 
@@ -72,6 +67,7 @@ class EventClassifier:
             urgency = 0.2
             priority = self.priority_engine.calculate_priority(confidence, severity, zone_importance, urgency)
             semantic = self.calculate_semantic_score(event_type, confidence, zone_importance)
+            reason = f"Significant frame motion detected (ratio: {motion_ratio:.3f})"
 
             classified_events.append({
                 "event_type": event_type,
@@ -82,6 +78,7 @@ class EventClassifier:
                 "urgency": urgency,
                 "priority_score": priority,
                 "semantic_score": semantic,
+                "capture_reason": reason,
                 "bbox": None
             })
             return classified_events
@@ -106,28 +103,38 @@ class EventClassifier:
                     zone_importance = rz.get("importance", 1.0)
                     break
 
-            if label == "person":
+            if label == "person_smiling":
+                event_type = "PERSON_SMILING"
+                severity = self.SEVERITY_MAP["PERSON_SMILING"]
+                urgency = 0.85
+                reason = f"Person smiling detected with confidence {conf*100:.1f}%"
+            elif label == "person":
                 if in_restricted:
                     event_type = "RESTRICTED_ZONE_INTRUSION"
                     severity = self.SEVERITY_MAP["RESTRICTED_ZONE_INTRUSION"]
                     urgency = 0.95
+                    reason = f"Person detected inside restricted zone ({zone_name})"
                 else:
                     event_type = "PERSON_DETECTED"
                     severity = self.SEVERITY_MAP["PERSON_DETECTED"]
                     urgency = 0.6
+                    reason = f"Person detected in monitored area with confidence {conf*100:.1f}%"
             elif label in ["car", "truck", "bus", "motorcycle", "vehicle"]:
                 if in_restricted:
                     event_type = "RESTRICTED_ZONE_INTRUSION"
                     severity = self.SEVERITY_MAP["RESTRICTED_ZONE_INTRUSION"]
                     urgency = 0.9
+                    reason = f"Vehicle detected inside restricted zone ({zone_name})"
                 else:
                     event_type = "VEHICLE_DETECTED"
                     severity = self.SEVERITY_MAP["VEHICLE_DETECTED"]
                     urgency = 0.5
+                    reason = f"Vehicle detected with confidence {conf*100:.1f}%"
             else:
                 event_type = f"{label.upper()}_DETECTED"
                 severity = self.SEVERITY_MAP.get(event_type, 0.4)
                 urgency = 0.3
+                reason = f"{label.title()} detected with confidence {conf*100:.1f}%"
 
             priority = self.priority_engine.calculate_priority(conf, severity, zone_importance, urgency)
             semantic = self.calculate_semantic_score(event_type, conf, zone_importance)
@@ -141,6 +148,7 @@ class EventClassifier:
                 "urgency": urgency,
                 "priority_score": priority,
                 "semantic_score": semantic,
+                "capture_reason": reason,
                 "bbox": bbox
             })
 

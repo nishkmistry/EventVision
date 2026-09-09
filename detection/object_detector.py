@@ -9,7 +9,11 @@ class ObjectDetector:
         self.imgsz = imgsz
         self.model = YOLO(model_name)
 
-    def detect(self, frame: np.ndarray, confidence_threshold: float = 0.3) -> List[Dict[str, Any]]:
+    def detect(self, frame: np.ndarray, confidence_threshold: float = 0.50) -> List[Dict[str, Any]]:
+        """
+        Run YOLO detection on frame with an elevated confidence threshold (0.50)
+        to eliminate false positives (e.g., bags as people, pens as bats).
+        """
         if frame is None or frame.size == 0:
             return []
 
