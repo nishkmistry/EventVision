@@ -4,6 +4,13 @@ import pandas as pd
 import yaml
 import time
 import os
+
+import sys
+from pathlib import Path
+
+# Add the project root (F:\EventVision) to Python path
+sys.path.append(str(Path(__file__).resolve().parent.parent))
+
 import psutil
 
 from detection.event_detector import EventDetector
