@@ -18,11 +18,7 @@ restricted_zones:
 detection:
   motion_threshold: 25
   min_contour_area: 500
-  min_motion_ratio: 0.015   # ignore trivial flicker/noise before running YOLO at all
   yolo_model_default: "yolov8n.pt"
-
-performance:
-  display_max_width: 800   # downscale frame sent to the dashboard for faster rendering
 
 priority:
   weights:

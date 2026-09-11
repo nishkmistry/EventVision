@@ -4,12 +4,6 @@ import pandas as pd
 import yaml
 import time
 import os
-
-import sys
-from pathlib import Path
-
-# Add the project root (F:\EventVision) to Python path
-sys.path.append(str(Path(__file__).resolve().parent.parent))
 import psutil
 
 from detection.event_detector import EventDetector
@@ -52,17 +46,8 @@ else:
     video_source = input_source_raw
 
 frame_step = st.sidebar.slider("Sampling Step (higher = maximum FPS / zero lag)", min_value=1, max_value=10, value=config.get("video", {}).get("process_every_n_frames", 2))
-display_max_width = st.sidebar.slider("Display width (lower = smoother stream)", min_value=320, max_value=1280,
-                                       value=int(config.get("performance", {}).get("display_max_width", 800)), step=80)
 snapshot_threshold = st.sidebar.slider("Significant Event Threshold", min_value=0.1, max_value=1.0, value=float(config.get("priority", {}).get("snapshot_priority_threshold", 0.50)), step=0.05)
 detector.snapshot_priority_threshold = snapshot_threshold
-
-def _resize_for_display(bgr_frame):
-    h, w = bgr_frame.shape[:2]
-    if w <= display_max_width:
-        return bgr_frame
-    scale = display_max_width / float(w)
-    return cv2.resize(bgr_frame, (display_max_width, int(h * scale)), interpolation=cv2.INTER_AREA)
 
 aws_enabled = st.sidebar.checkbox("Enable AWS S3 Cloud Sync", value=config.get("aws", {}).get("enabled", False))
 
@@ -126,7 +111,7 @@ if st.session_state.streaming and st.session_state.camera_reader:
 
         # Smooth sampling
         if frame_idx % frame_step != 0:
-            rgb_frame = cv2.cvtColor(_resize_for_display(frame), cv2.COLOR_BGR2RGB)
+            rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             video_placeholder.image(rgb_frame, channels="RGB", use_container_width=True)
             continue
 
@@ -148,7 +133,7 @@ if st.session_state.streaming and st.session_state.camera_reader:
                 cv2.putText(display_frame, label, (bbox[0], max(25, bbox[1] - 10)),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
 
-        rgb_frame = cv2.cvtColor(_resize_for_display(display_frame), cv2.COLOR_BGR2RGB)
+        rgb_frame = cv2.cvtColor(display_frame, cv2.COLOR_BGR2RGB)
         video_placeholder.image(rgb_frame, channels="RGB", use_container_width=True)
 
         fps = frame_idx / max(0.001, time.time() - start_time)

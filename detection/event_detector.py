@@ -27,9 +27,6 @@ class EventDetector:
         )
         self.smile_detector = SmileDetector()
 
-        # Trivial flicker/noise (tiny motion_ratio) never reaches YOLO at all.
-        self.min_motion_ratio = det_cfg.get("min_motion_ratio", 0.015)
-
         restricted_zones = self.config.get("restricted_zones", [])
         p_weights = p_cfg.get("weights", None)
         priority_engine = PriorityEngine(weights=p_weights)
@@ -46,11 +43,9 @@ class EventDetector:
         has_motion, motion_bboxes, motion_ratio = self.motion_detector.detect(frame)
 
         # Detect smiles (always active on frame or motion)
-        smile_detections = self.smile_detector.detect_smiles(frame) if has_motion else []
+        smile_detections = self.smile_detector.detect_smiles(frame)
 
-        # Ignore trivial background flicker before it ever reaches YOLO —
-        # this alone eliminates most unnecessary inferences on a live feed.
-        if not has_motion or (motion_ratio < self.min_motion_ratio and not smile_detections):
+        if not has_motion and not smile_detections:
             return []
 
         # Motion / smile triggered automated object detection
